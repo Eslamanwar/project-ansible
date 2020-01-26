@@ -1,0 +1,94 @@
+---
+- name: Deploy Dynatrace
+  hosts: localhost
+  become: yes
+  gather_facts: yes
+
+  pre_tasks:
+    - name: Ensure Pip is installed.
+      package:
+        name: python-pip
+        state: present
+
+    - name: Ensure OpenShift client is installed.
+      pip:
+        name: openshift
+        state: present
+
+  tasks:
+    - name: Create argocd k8s namespace
+      k8s:
+        name: argocd
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Download argo file with specific version
+      get_url:
+        url: https://raw.githubusercontent.com/argoproj/argo-cd/{{ argocd_version }}/manifests/install.yaml
+        dest: ../manifests/install.yaml
+
+    - name: Deploy Argocd
+      k8s:
+        state: present
+        namespace: argocd
+        src: ../manifests/install.yaml
+
+    - name: Deploy Argocd Ingress
+      k8s:
+        state: present
+        namespace: argocd
+        definition:
+          apiVersion: extensions/v1beta1
+          kind: Ingress
+          metadata:
+            name: argocd-server-http-ingress
+            annotations:
+              kubernetes.io/ingress.class: "nginx"
+              nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+              nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+          spec:
+            rules:
+              - http:
+                  paths:
+                    - backend:
+                        serviceName: argocd-server
+                        servicePort: http
+                host: "{{ argocd_url }}"
+            tls:
+              - hosts:
+                  - "{{ argocd_url }}"
+                secretName: argocd-secret        
+
+
+    - name: Deploy Argocd Ingress
+      k8s:
+        state: present
+        namespace: argocd
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: argocd-cm
+            namespace: argocd
+            labels:
+              app.kubernetes.io/name: argocd-cm
+              app.kubernetes.io/part-of: argocd
+          data:
+            url: https://{{ argocd_url }}
+            statusbadge.enabled: 'true'
+            users.anonymous.enabled: "true"
+            dex.config: |
+              connectors:
+                - type: gitlab
+                  id: gitlab
+                  name: Gitlab
+                  config:
+                    baseURL: https://{{ gitlab_url }}
+                    clientID: "{{ gitlab_application_id }}"
+                    clientSecret: "{{ gitlab_application_secret }}"
+            repository.credentials: |
+              - url: git@{{ gitlab_url }}
+                sshPrivateKeySecret:
+                  name: gitlab-deploy-key-secret
+                  key: sshPrivateKey
