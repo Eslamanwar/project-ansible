@@ -69,7 +69,8 @@ kubectl -n argocd port-forward svc/argocd-server 7000:80
 
 ```
 
-![alt text](https://github.com/Eslamanwar/project-ansible/blob/master/dynatrace/images/ansible1.png?raw=true)
+![alt text](https://github.com/Eslamanwar/project-ansible/blob/master/argocd/images/argo1.png?raw=true)
+![alt text](https://github.com/Eslamanwar/project-ansible/blob/master/argocd/images/argo2.png?raw=true)
 
 
 
