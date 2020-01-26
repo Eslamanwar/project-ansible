@@ -26,13 +26,13 @@
     - name: Download argo file with specific version
       get_url:
         url: https://raw.githubusercontent.com/argoproj/argo-cd/{{ argocd_version }}/manifests/install.yaml
-        dest: ../manifests/install.yaml
+        dest: ./install.yaml
 
     - name: Deploy Argocd
       k8s:
         state: present
         namespace: argocd
-        src: ../manifests/install.yaml
+        src: ./install.yaml
 
     - name: Deploy Argocd Ingress
       k8s:
@@ -92,3 +92,75 @@
                 sshPrivateKeySecret:
                   name: gitlab-deploy-key-secret
                   key: sshPrivateKey
+                  
+    - name: Deploy Argocd gitlab deploy key secret
+      k8s:
+        state: present
+        namespace: argocd
+        definition:        
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: gitlab-deploy-key-secret
+            labels:
+              app.kubernetes.io/name: gitlab-deploy-key-secret
+              app.kubernetes.io/part-of: argocd
+          type: Opaque
+          data:
+            sshPrivateKey: "{{ gitlab_deploy_private_key }}"
+
+    - name: Deploy argocd ssh known hosts configmap
+      k8s:
+        state: present
+        namespace: argocd
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: argocd-ssh-known-hosts-cm
+            namespace: argocd
+            labels:
+              app.kubernetes.io/name: argocd-ssh-known-hosts-cm
+              app.kubernetes.io/part-of: argocd
+          data:
+            ssh_known_hosts: |
+              # gitlab.us:22 SSH-2.0-OpenSSH_7.2p2 Ubuntu-4ubuntu2.8
+              gitlab.us ssh-rsa HSUIUENCquwayfdjnasckheijfklansckjniurfnjkasncnashcuerncjansc/RHSCDjsndcencmandnscjsahcelanckxs/+6q72jashcnasc/ANBCSJnkjsaciefjmknasmcnajkfnkas cjjhdsufnsdmnckjnckjnsa
+              # gitlab.us:22 SSH-2.0-OpenSSH_7.2p2 Ubuntu-4ubuntu2.8
+              gitlab.us ecdsa-sha2-nistp256 BHSAGFHSAniajkdnviernfmcsdncoaismcanscjrsuhgkansdmc/HBVSHDFUJNnaskjfhienfasncmanskjchsjrbnmakjchauenfjsacuefjmckans
+              # gitlab.us:22 SSH-2.0-OpenSSH_7.2p2 Ubuntu-4ubuntu2.8
+              gitlab.us ssh-ed25519 AAAAJBJDSCJK89324jnbjwqnackjanskjcxnsamansjcaniuenasckasnoicanmekxa                
+    - name: Deploy argocd panda
+      k8s:
+        state: present
+        namespace: argocd
+        definition:
+          apiVersion: argoproj.io/v1alpha1
+          kind: Application
+          metadata:
+            name: argocd-panda
+            namespace: argocd
+            finalizers:
+              - resources-finalizer.argocd.argoproj.io
+          spec:
+            project: default
+            source:
+              repoURL: git@gitlab.doc.state.wi.us:eai/argocd-panda.git
+              targetRevision: HEAD
+              path: .
+              helm:
+                releaseName: argocd-panda
+                valueFiles:
+                  - "{{ argocd_values_file }}"
+            destination:
+              server: https://kubernetes.default.svc
+              namespace: argocd
+            syncPolicy:
+              automated:
+                prune: true # Specifies if resources should be pruned during auto-syncing ( false by default ).
+                selfHeal: true # Specifies if partial app sync should be executed when resources are changed only in target Kubernetes cluster and no git change detected ( false by default ).
+            ignoreDifferences:
+              - group: apps
+                kind: Deployment
+                jsonPointers:
+                  - /spec/replicas
