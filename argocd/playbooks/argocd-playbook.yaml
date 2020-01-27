@@ -1,5 +1,5 @@
 ---
-- name: Deploy Dynatrace
+- name: Deploy Argocd
   hosts: localhost
   become: yes
   gather_facts: yes
@@ -61,7 +61,7 @@
                 secretName: argocd-secret        
 
 
-    - name: Deploy Argocd Ingress
+    - name: Deploy Argocd Configmap
       k8s:
         state: present
         namespace: argocd
